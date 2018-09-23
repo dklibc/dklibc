@@ -1,0 +1,50 @@
+Kernel headers:
+* /usr/src/linux-2.6.x/include
+* /usr/src/linux-2.6.x/arch/x86/include
+
+Glibc headers:
+* /usr/include
+* /usr/include/linux - copy of the older stable kernel headers
+* /usr/include/asm - too
+* /usr/include/asm-generic - too
+
+Glibc uses a copy of kernel headers from the older stable kernel version 
+(kernel headers are backwards compatible).
+
+* unistd.h - POSIX API functions declarations (provided by glibc)
+* string.h - inline asm string functions
+
+These headers are provided by kernel (since POSIX defines only symbolic 
+names not values of the constants):
+* errno.h - errno codes (ENOENT, EIO, ...)
+* types.h - syscall types (size_t, time_t, pid_t, uid_t, gid_t, time_t, NULL, dev_t, ... )
+* signal.h - signal codes (SIGINT, SIGHUP, ...)
+* fcntl.h - O_RDONLY, O_WRITE, O_RDWR, O_CREAT, O_EXCL, O_TRUNC, O_APPEND, ...
+* stat.h - stat struct and macroses to test stat @mode field: S_ISREG(m), S_ISDIR(m), S_ISCHR(m), S_ISBLK(m), S_ISFIFO(m), S_ISSOCK(m)
+
+We must get from kernel:
+* syscall numbers
+* errno codes: EIO, EINVAL, ENOENT, ...
+* file open() and fcntl() flags: O_RDONLY, O_RDWR, O_CREAT, O_TRUNC, ...
+* signals: SIGCHLD, SIGTERM, SIGHUP, ...
+
+///////////////////////////////////////////////////////
+
+Kernel is backward compatible: old syscall versions are supported in 
+new kernels, symbollic constants values don't change. 
+
+Changes summary:
+
+* UID and GID were 16-bit, but now are 32-bit. So, 32-bit versions of 
+syscalls: getuid, getgid, setuid, setgid, chown, ... are added. But if 
+you are using 16-bit versions on 32-bit system that uses 32-bit id's 
+internally you will get only low 16-bits
+   
+* Large file support is adding: 64-bit offsets. So 64-bit versions of 
+file related syscalls are added. If you are using 32-bit versions - you 
+will fail to work with large files (that system itself supports)
+
+Conclusion: most of changes are adding new features in form of new 
+syscalls. Can struct - arg or return value of syscall change? You should 
+monitor new version of kernel and adapt your libc.
+
