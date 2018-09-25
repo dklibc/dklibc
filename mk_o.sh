@@ -1,2 +1,2 @@
-tcc -fnostdlib -c -I./include $1.c && ar rcs libdc.a $1.o
+tcc -fnostdlib -c -I./include $1.c && ar rcs dklibc.a $1.o
  

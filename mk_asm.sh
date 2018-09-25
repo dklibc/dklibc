@@ -1,4 +1,3 @@
-fasm $1.asm &&\
-  ar rcs libdc.a $1.o
+fasm $1.asm && ar rcs dklibc.a $1.o
 
 

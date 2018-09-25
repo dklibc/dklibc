@@ -1,50 +1,144 @@
-Kernel headers:
+"Person who say it cannot be done should not interrupt person doing it" --
+Chinese proverb.
+
+dklibc -- small and simple realization of libc for x86 32-bit Linux kernel
+(2.6 and older). I hope may be someone will use it for teaching purposes.
+Coding libc byself will get you good knowledge of universe design)) Main part
+of the dklibc I wrote in Feb-March, 2016.
+
+Sources of dietlibc è klibc are quite readable and I recommend you to
+investigate them. May be you will get some interesting tips from there.
+
+==Compilation==
+
+For compilation of the several asm modules you need FASM. For compilation of
+the C modules you need any C compiler (GCC isn't mandatory). The resulted
+object modules are added to an archive (static lib) -- dklibc.a This lib you
+need to statically link to your program.
+
+==Linking==
+
+Any C compiler automatically link system libc with your program. We need to use
+dklibc instead. GCC option -nostdlib does the job (it's equivalent to
+-nostartfiles -nodefaultlibs). Also will be better if a compiler will use
+dklibc headers instead of system libc headers. So, compilation line for GCC
+should be like this:
+gcc -nostdlib -o myprog myprog.c -I/include/dklibc -l:/usr/lib/dklibc.a
+
+==List of implemented functions==
+
+Standard C:
+* String functions: strcmp, strcpy, strlen, strchr, memcpy, memmove, memcmp,
+memset, atoi
+* Heap functions: malloc based on brk/sbrk syscall, also free, realloc, calloc
+* Streams (buffered I/O): struct FILE *, fopen, fclose, fseek, fread, fwrite,
+gets, getchar, fgetc, puts, fputs, fflush
+* Printf: vprintf, sprintf, snprintf, fprintf, ... NOTE: all of them are
+wrappers on vsnprintf
+* Time functions: strftime, time, localtime, gmtime, mktime
+* stdarg.h macros: va_list, va_start, va_arg
+* errno, strerror
+* sleep
+* exit
+
+BSD Sockets:
+* htons, htonl, ntohs, ntohl
+* socket, bind, accept, listen, connect, recv, send, recvfrom, sendto,
+shutdown, getpeername, getsockname, ... //just a wrappers for a single entry
+point in kernel
+
+POSIX:
+* Syscalls: open, close, read, write, lseek, fork, execve, execv, execl, brk,
+sbrk, kill, chdir, rename, time, dup, dup2, pipe, truncate, sync, wait,
+waitpid, getpid, ioctl, unlink, link, utime, mkdir, chown, chmod, getcwd,
+getuid, getgid, alarm, signal, uname, sigprocmask, setuid, setgid, pause,
+mknod, mount, umount, reboot, umask, ...
+* getenv, getopt
+* Functions for sending messages to syslogd: openlog, syslog
+* Functions for reading dirs: DIR, opendir, closedir, readdir
+* getpass -- function to get password from terminal without echo
+* Functions to work with the files: utmp, /etc/password, /etc/shadow,
+/etc/group
+
+-----------------------------------------------------------------------------
+
+==Internals==
+
+Relatively complex modules: stream, printf, malloc, time. The rest are simple.
+
+_start symbol -- default program entry point (in ELF format) is defined in
+syscallN.asm. After initialization calls function main
+
+==What info we need to know==
+
+* How to make a syscall. For Linux 32-bit x86 syscall is made by int 0x80
+* List of the Linux syscalls. I got it from here --
+http://syscalls.kernelgrok.com
+* List of the standard C functions, POSIX API, standard headers
+
+==Kernel headers==
+
+POSIX defines:
+* Only symbolic names not values of the constants
+* Only names and type of some structs fields -- exact struct depends on system
+* Only names of some types
+
+So, we need grab system depending info from kernel headers. Look for them here:
 * /usr/src/linux-2.6.x/include
 * /usr/src/linux-2.6.x/arch/x86/include
 
-Glibc headers:
-* /usr/include
-* /usr/include/linux - copy of the older stable kernel headers
-* /usr/include/asm - too
-* /usr/include/asm-generic - too
+This ones we need (incomplete list):
+* errno.h -- errno codes (ENOENT, EIO, EINTR...)
+* types.h -- syscall types (size_t, time_t, pid_t, uid_t, gid_t, time_t,
+dev_t, ... )
+* signal.h -- signal codes (SIGINT, SIGHUP, SIGKILL...) and SIG_SETMASK,
+SIG_BLOCK, SIG_UNBLOCK
+* fcntl.h -- O_RDONLY, O_WRITE, O_RDWR, O_CREAT, O_EXCL, O_TRUNC, O_APPEND, ...
+* stat.h -- struct stat and macros to test stat mode field: S_ISREG(m),
+S_ISDIR(m), S_ISCHR(m), S_ISBLK(m), S_ISFIFO(m), S_ISSOCK(m)
+* dirent.h -- dirent struct
 
-Glibc uses a copy of kernel headers from the older stable kernel version 
-(kernel headers are backwards compatible).
+Kernel is backward compatible: old syscall versions are supported in new
+kernels, symbolic constants values don't change. Changes summary:
+* UID and GID were 16-bit, but now are 32-bit. So, 32-bit versions of syscalls
+getuid, getgid, setuid, setgid, chown, ... are added. But if you are using
+16-bit versions on 32-bit system that uses 32-bit id's internally you will get
+only low 16-bits
+* Large file support is adding: 64-bit offsets. So 64-bit versions of file
+related syscalls are added. If you are using 32-bit versions -- you will fail
+to work with large files (that system itself supports)
 
-* unistd.h - POSIX API functions declarations (provided by glibc)
-* string.h - inline asm string functions
+Conclusion: most of changes are adding new features in form of new syscalls.
+Can struct, arg or return value of syscall change? You should monitor new
+version of kernel and adapt your libc.
 
-These headers are provided by kernel (since POSIX defines only symbolic 
-names not values of the constants):
-* errno.h - errno codes (ENOENT, EIO, ...)
-* types.h - syscall types (size_t, time_t, pid_t, uid_t, gid_t, time_t, NULL, dev_t, ... )
-* signal.h - signal codes (SIGINT, SIGHUP, ...)
-* fcntl.h - O_RDONLY, O_WRITE, O_RDWR, O_CREAT, O_EXCL, O_TRUNC, O_APPEND, ...
-* stat.h - stat struct and macroses to test stat @mode field: S_ISREG(m), S_ISDIR(m), S_ISCHR(m), S_ISBLK(m), S_ISFIFO(m), S_ISSOCK(m)
+------------------------------------------------------------------------------
 
-We must get from kernel:
-* syscall numbers
-* errno codes: EIO, EINVAL, ENOENT, ...
-* file open() and fcntl() flags: O_RDONLY, O_RDWR, O_CREAT, O_TRUNC, ...
-* signals: SIGCHLD, SIGTERM, SIGHUP, ...
+==Linus syscall==
 
-///////////////////////////////////////////////////////
+POSIX declares API. Libc implements POSIX API. But libc cannot do this without
+help from kernel. Libc uses kernel functions ("syscalls") How to do a syscall
+depends on arch. For x86 Linux syscalls are done by int0x80. The most functions
+from the POSIX API have a corresponding syscall. One-by-one: one call of POSIX
+function leads to the single syscall. But there are exceptions from this rule:
+wrapper libc function can make a great job by preparing args and doing
+different syscalls.
 
-Kernel is backward compatible: old syscall versions are supported in 
-new kernels, symbollic constants values don't change. 
+For the most of the Linux syscalls there is the corresponding function in
+glibc. If you haven't a new version of glibc but you need to test a new
+syscall -- use glibc wrapper for doing syscall by its number:
+long syscall(long number, ...) Symbolic constants of syscalls numbers
+(SYS_bla_bla) you can get here -- sys/syscall.h
 
-Changes summary:
+For asm-masters:
+# Store syscall number in EAX
+# Store the rest of syscall args in (by order): EBX, ECX, EDX, ESI, EDI, EBP
+# int 0x80
+# Result will be in EAX
 
-* UID and GID were 16-bit, but now are 32-bit. So, 32-bit versions of 
-syscalls: getuid, getgid, setuid, setgid, chown, ... are added. But if 
-you are using 16-bit versions on 32-bit system that uses 32-bit id's 
-internally you will get only low 16-bits
-   
-* Large file support is adding: 64-bit offsets. So 64-bit versions of 
-file related syscalls are added. If you are using 32-bit versions - you 
-will fail to work with large files (that system itself supports)
+Example:
+	mov eax, 1		; Exit syscall
+	xor ebx, ebx	; exit code = 0
+	int 0x80		; Do it!
 
-Conclusion: most of changes are adding new features in form of new 
-syscalls. Can struct - arg or return value of syscall change? You should 
-monitor new version of kernel and adapt your libc.
-
+Compare: BSD kernel gets syscall args from the stack.
